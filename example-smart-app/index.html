@@ -1,102 +1,51 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta http-equiv='X-UA-Compatible' content='IE=edge' />
-    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
-    <title>Example-SMART-App</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <link rel='stylesheet' type='text/css' href='./src/css/example-smart-app.css'>
-    <!--
-      Temporarily disable cerner-smart-embeddable-lib
-      <link rel='stylesheet' type='text/css' href='./lib/css/cerner-smart-embeddable-lib-1.0.0.min.css'>
-    -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>pj-s SMART App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+      code, pre { background: #f6f8fa; padding: 2px 6px; border-radius: 6px; }
+      .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 12px 0; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
   </head>
   <body>
-    <div id='errors'>
-    </div>
-    <div id="loading" class="spinner">
-      <div class="bounce1"></div>
-      <div class="bounce2"></div>
-      <div class="bounce3"></div>
-    </div>
-    <div id='holder' >
-      <h2>Example-SMART-App</h2>
-
-      <h2>Patient Resource</h2>
-      <table>
-        <tr>
-          <th>First Name:</th>
-          <td id='fname'></td>
-        </tr>
-        <tr>
-          <th>Last Name:</th>
-          <td id='lname'></td>
-        </tr>
-        <tr>
-          <th>Gender:</th>
-          <td id='gender'></td>
-        </tr>
-        <tr>
-          <th>Date of Birth:</th>
-          <td id='birthdate'></td>
-        </tr>
-      </table>
-      <h2>Observation Resource</h2>
-      <table>
-        <tr>
-          <th>Height:</th>
-          <td id='height'></td>
-        </tr>
-        <tr>
-          <th>Systolic Blood Pressure:</th>
-          <td id='systolicbp'></td>
-
-        </tr>
-        <tr>
-          <th>Diastolic Blood Pressure:</th>
-          <td id='diastolicbp'></td>
-        </tr>
-        <tr>
-          <th>LDL:</th>
-          <td id='ldl'></td>
-        </tr>
-        <tr>
-          <th>HDL:</th>
-          <td id='hdl'></td>
-        </tr>
-      </table>
-    </div>
-    <!-- Required JS files to enable this page to embed within an MPage -->
-    <!--
-      Temporarily disable cerner-smart-embeddable-lib
-      <script src='https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.26.0/polyfill.min.js'></script>
-      <script src='./lib/js/cerner-smart-embeddable-lib-1.0.0.min.js'></script>
-    -->
-
-    <!-- Application-level javascript-->
-    <script src='./src/js/example-smart-app.js'></script>
-
-    <!-- FHIR Client JS Library -->
-    <script src="https://cdn.jsdelivr.net/npm/fhirclient@2.4.6/build/fhir-client.min.js"></script>
-
-    <!-- Prevent session bleed caused by single threaded embedded browser and sessionStorage API -->
-    <!-- https://github.com/cerner/fhir-client-cerner-additions -->
-    <script src='./lib/js/fhir-client-cerner-additions-1.0.0.js'></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <h1>pj-s SMART App</h1>
+    <div id="out" class="card">Loading…</div>
     <script>
-      extractData().then(
-        //Display Patient Demographics and Observations if extractData was success
-        function(p) {
-          drawVisualization(p);
-        },
-
-        //Display 'Failed to call FHIR Service' if extractData failed
-        function() {
-          $('#loading').hide();
-          $('#errors').html('<p> Failed to call FHIR Service </p>');
+      const out = document.getElementById("out");
+      const show = (html) => out.innerHTML = html;
+      FHIR.oauth2.ready().then(async client => {
+        try {
+          const pid = client.getPatientId();
+          const patient = await client.request(`Patient/${pid}`);
+          const obs = await client.request(`Observation?patient=${pid}&_count=5`);
+          const name = patient.name?.[0] || {};
+          const displayName = [name.given?.join(" "), name.family].filter(Boolean).join(" ");
+          const items = (obs.entry||[]).map(e => {
+            const o = e.resource;
+            const code = o.code?.text || o.code?.coding?.[0]?.display || o.code?.coding?.[0]?.code || "Observation";
+            const val = o.valueQuantity ? `${o.valueQuantity.value} ${o.valueQuantity.unit||""}`.trim()
+                        : o.valueString || o.valueCodeableConcept?.text || "—";
+            return `<li>${code}: <strong>${val}</strong></li>`;
+          }).join("");
+          show(`
+            <div class="card">
+              <h2>Patient</h2>
+              <p><strong>${displayName||"Unknown"}</strong> (ID: ${pid})</p>
+            </div>
+            <div class="card">
+              <h2>Recent Observations</h2>
+              <ul>${items||"<li>None</li>"}</ul>
+            </div>
+          `);
+        } catch (e) {
+          show("<pre>"+(e.stack||e.message||e)+"</pre>");
         }
-      );
+      }).catch(e => show("<pre>"+(e.stack||e.message||e)+"</pre>"));
     </script>
   </body>
 </html>
